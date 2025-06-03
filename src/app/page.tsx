@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { FallingCoins } from '@/components/falling-coins';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock } from 'lucide-react';
+import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock, CalendarDays } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 export default function WageWatcherPage() {
@@ -29,7 +29,7 @@ export default function WageWatcherPage() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+    return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(amount);
   };
 
   return (
@@ -41,7 +41,7 @@ export default function WageWatcherPage() {
           WageWatcher
         </h1>
         <p className="text-lg text-muted-foreground mt-2">
-          Track your earnings in real-time & celebrate your milestones!
+          实时追踪您的收入 &庆祝您的里程碑！
         </p>
       </header>
 
@@ -50,36 +50,49 @@ export default function WageWatcherPage() {
           <DialogTrigger asChild>
             <Button variant="ghost" size="icon" className="absolute top-4 right-4 text-muted-foreground hover:text-foreground">
               <Settings className="h-5 w-5" />
-              <span className="sr-only">Open Settings</span>
+              <span className="sr-only">打开设置</span>
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Settings</DialogTitle>
+              <DialogTitle>设置</DialogTitle>
               <DialogDescription>
-                Configure your tracking parameters. Changes are saved automatically.
+                配置您的追踪参数。更改将自动保存。
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div>
-                <Label htmlFor="modalHourlyWage" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
-                  <WalletCards className="w-4 h-4 mr-2 text-primary" /> Hourly Wage
+                <Label htmlFor="modalMonthlySalary" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
+                  <WalletCards className="w-4 h-4 mr-2 text-primary" /> 月薪
                 </Label>
                 <Input
-                  id="modalHourlyWage"
-                  name="hourlyWage"
+                  id="modalMonthlySalary"
+                  name="monthlySalary"
                   type="number"
-                  value={inputs.hourlyWage}
+                  value={inputs.monthlySalary}
                   onChange={handleInputChange}
-                  placeholder="e.g., 25"
+                  placeholder="例如, 5000"
                   className="bg-input"
-                  // Settings can be changed even if running, effective on next calculation cycle or manual restart
+                />
+              </div>
+              <div>
+                <Label htmlFor="modalWorkDaysPerMonth" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
+                  <CalendarDays className="w-4 h-4 mr-2 text-primary" /> 每月工作天数
+                </Label>
+                <Input
+                  id="modalWorkDaysPerMonth"
+                  name="workDaysPerMonth"
+                  type="number"
+                  value={inputs.workDaysPerMonth}
+                  onChange={handleInputChange}
+                  placeholder="例如, 22"
+                  className="bg-input"
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="modalWorkStartTime" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
-                    <CalendarClock className="w-4 h-4 mr-2 text-primary" /> Work Start Time
+                    <CalendarClock className="w-4 h-4 mr-2 text-primary" /> 工作开始时间
                   </Label>
                   <Input
                     id="modalWorkStartTime"
@@ -92,7 +105,7 @@ export default function WageWatcherPage() {
                 </div>
                 <div>
                   <Label htmlFor="modalWorkEndTime" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
-                    <CalendarClock className="w-4 h-4 mr-2 text-primary" /> Work End Time
+                    <CalendarClock className="w-4 h-4 mr-2 text-primary" /> 工作结束时间
                   </Label>
                   <Input
                     id="modalWorkEndTime"
@@ -106,7 +119,7 @@ export default function WageWatcherPage() {
               </div>
               <div>
                 <Label htmlFor="modalCelebrationThreshold" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
-                  <Gift className="w-4 h-4 mr-2 text-primary" /> Celebration Threshold
+                  <Gift className="w-4 h-4 mr-2 text-primary" /> 庆祝阈值 (元)
                 </Label>
                 <Input
                   id="modalCelebrationThreshold"
@@ -114,14 +127,14 @@ export default function WageWatcherPage() {
                   type="number"
                   value={inputs.celebrationThreshold}
                   onChange={handleInputChange}
-                  placeholder="e.g., 100"
+                  placeholder="例如, 100"
                   className="bg-input"
                 />
               </div>
             </div>
             <DialogFooter>
               <Button type="button" onClick={() => setIsSettingsModalOpen(false)}>
-                Done
+                完成
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -130,30 +143,30 @@ export default function WageWatcherPage() {
         <div className="flex flex-col sm:flex-row gap-3 pt-8">
           <Button onClick={isRunning ? stopTracking : startTracking} className="flex-1" size="lg">
             {isRunning ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
-            {isRunning ? 'Pause' : 'Start Tracking'}
+            {isRunning ? '暂停' : '开始追踪'}
           </Button>
           <Button onClick={resetTracking} variant="outline" className="flex-1 sm:flex-none" size="lg">
-            <RotateCcw className="mr-2 h-5 w-5" /> Reset
+            <RotateCcw className="mr-2 h-5 w-5" /> 重置
           </Button>
         </div>
         
         <Separator />
 
         <section aria-labelledby="earnings-display" className="text-center">
-          <h2 id="earnings-display" className="sr-only">Earnings Display</h2>
-          <p className="text-sm text-muted-foreground mb-1">Total Earned Today</p>
+          <h2 id="earnings-display" className="sr-only">收入显示</h2>
+          <p className="text-sm text-muted-foreground mb-1">今日总收入</p>
           <p className="text-5xl sm:text-6xl font-bold text-primary tracking-tight">
             {formatCurrency(displayData.currentEarnings)}
           </p>
         </section>
 
         <section aria-labelledby="metrics-panel">
-          <h2 id="metrics-panel" className="sr-only">Detailed Metrics</h2>
+          <h2 id="metrics-panel" className="sr-only">详细指标</h2>
           <div className="space-y-3">
             <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center text-muted-foreground">
                 <Clock className="w-5 h-5 mr-2 text-accent" />
-                <span>Elapsed Time (Today)</span>
+                <span>已过时间 (今日)</span>
               </div>
               <span className="font-semibold text-foreground">{displayData.elapsedTimeFormatted}</span>
             </div>
@@ -161,7 +174,7 @@ export default function WageWatcherPage() {
             <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center text-muted-foreground">
                 <TrendingUp className="w-5 h-5 mr-2 text-accent" />
-                <span>Earnings/Sec</span>
+                <span>每秒收入</span>
               </div>
               <span className="font-semibold text-foreground">{formatCurrency(displayData.earningsPerSecond)}</span>
             </div>
@@ -169,17 +182,18 @@ export default function WageWatcherPage() {
           
           <div className="mt-4">
             <div className="flex justify-between text-sm text-muted-foreground mb-1">
-              <span>Progress (Today's Goal)</span>
-              <span>{formatCurrency(displayData.totalExpectedEarnings)} Goal</span>
+              <span>进度 (今日目标)</span>
+              <span>{formatCurrency(displayData.totalExpectedEarnings)} 目标</span>
             </div>
-            <Progress value={displayData.progress} aria-label={`Today's earnings progress: ${displayData.progress.toFixed(0)}%`} className="w-full h-3"/>
+            <Progress value={displayData.progress} aria-label={`今日收入进度: ${displayData.progress.toFixed(0)}%`} className="w-full h-3"/>
           </div>
         </section>
       </main>
 
       <footer className="mt-8 text-center text-sm text-muted-foreground">
-        <p>&copy; {new Date().getFullYear()} WageWatcher. Keep earning!</p>
+        <p>&copy; {new Date().getFullYear()} WageWatcher. 努力赚钱!</p>
       </footer>
     </div>
   );
 }
+

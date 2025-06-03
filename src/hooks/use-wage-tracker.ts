@@ -6,24 +6,23 @@ import { shouldAnimate } from '@/ai/flows/animation-orchestrator';
 import type { AnimationOrchestratorInput } from '@/ai/flows/animation-orchestrator';
 import { useToast } from '@/hooks/use-toast';
 
-const LOCAL_STORAGE_KEY = 'wageWatcherDataV3'; // V3 for new time-based schedule logic
+const LOCAL_STORAGE_KEY = 'wageWatcherDataV4'; // V4 for monthly salary logic
 
-const DEFAULT_HOURLY_WAGE = 20;
+const DEFAULT_MONTHLY_SALARY = 5000;
+const DEFAULT_WORK_DAYS_PER_MONTH = 22;
 const DEFAULT_WORK_START_TIME = "09:00";
 const DEFAULT_WORK_END_TIME = "17:00";
 const DEFAULT_CELEBRATION_THRESHOLD = 100;
 
 type WageWatcherPersistentData = {
-  hourlyWage: number;
+  monthlySalary: number;
+  workDaysPerMonth: number;
   workStartTime: string;
   workEndTime: string;
   celebrationThreshold: number;
-  // isRunning & sessionStartTime are not strictly needed for restoring schedule-based state,
-  // but useful if we want to preserve manual pause/resume state across sessions without schedule override.
-  // For now, schedule always dictates on load.
-  isRunning: boolean; // Saved state if user explicitly paused/played.
-  elapsedTimeBeforeCurrentSession: number; // Stores total elapsed time when timer is manually paused.
-  sessionStartTime?: number; // Timestamp when current manual session started.
+  isRunning: boolean;
+  elapsedTimeBeforeCurrentSession: number;
+  sessionStartTime?: number;
   lastAnimationEarningsCheck: number;
   lastAnimationTimestamp: number;
 };
@@ -31,7 +30,6 @@ type WageWatcherPersistentData = {
 const getTimestampForToday = (timeStr: string, baseDate: Date = new Date()): number => {
     const [hours, minutes] = timeStr.split(':').map(Number);
     if (isNaN(hours) || isNaN(minutes)) {
-        // Fallback to current time on parse error, or handle more gracefully
         return new Date(baseDate).setHours(0,0,0,0); 
     }
     const date = new Date(baseDate);
@@ -44,15 +42,14 @@ export function useWageTracker() {
   const { toast } = useToast();
 
   const [inputs, setInputs] = useState({
-    hourlyWage: DEFAULT_HOURLY_WAGE.toString(),
+    monthlySalary: DEFAULT_MONTHLY_SALARY.toString(),
+    workDaysPerMonth: DEFAULT_WORK_DAYS_PER_MONTH.toString(),
     workStartTime: DEFAULT_WORK_START_TIME,
     workEndTime: DEFAULT_WORK_END_TIME,
     celebrationThreshold: DEFAULT_CELEBRATION_THRESHOLD.toString(),
   });
 
   const [isRunning, setIsRunning] = useState(false);
-  // elapsedTimeBeforeCurrentSession stores manually accumulated time during pauses within a day.
-  // It's reset if the app reloads and recalculates based on today's schedule.
   const [elapsedTimeBeforeCurrentSession, setElapsedTimeBeforeCurrentSession] = useState(0);
   const [sessionStartTime, setSessionStartTime] = useState<number | null>(null);
 
@@ -67,33 +64,26 @@ export function useWageTracker() {
     if (typeof window !== 'undefined') {
       const savedDataRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
       let initialSettings = {
-        hourlyWage: DEFAULT_HOURLY_WAGE.toString(),
+        monthlySalary: DEFAULT_MONTHLY_SALARY.toString(),
+        workDaysPerMonth: DEFAULT_WORK_DAYS_PER_MONTH.toString(),
         workStartTime: DEFAULT_WORK_START_TIME,
         workEndTime: DEFAULT_WORK_END_TIME,
         celebrationThreshold: DEFAULT_CELEBRATION_THRESHOLD.toString(),
       };
       
-      let savedElapsedTimeBeforeSession = 0;
-      // isRunning and sessionStartTime from storage are for potential future use if we want to restore exact manual pause state.
-      // For now, they are mostly informational for saving.
-      // let savedIsRunning = false; 
-      // let savedSessionStartTime: number | undefined = undefined;
-
-
       if (savedDataRaw) {
         try {
           const savedData: WageWatcherPersistentData = JSON.parse(savedDataRaw);
           initialSettings = {
-            hourlyWage: (savedData.hourlyWage || DEFAULT_HOURLY_WAGE).toString(),
+            monthlySalary: (savedData.monthlySalary || DEFAULT_MONTHLY_SALARY).toString(),
+            workDaysPerMonth: (savedData.workDaysPerMonth || DEFAULT_WORK_DAYS_PER_MONTH).toString(),
             workStartTime: savedData.workStartTime || DEFAULT_WORK_START_TIME,
             workEndTime: savedData.workEndTime || DEFAULT_WORK_END_TIME,
             celebrationThreshold: (savedData.celebrationThreshold || DEFAULT_CELEBRATION_THRESHOLD).toString(),
           };
           setLastAnimationTimestamp(savedData.lastAnimationTimestamp || 0);
           setLastAnimationEarningsCheck(savedData.lastAnimationEarningsCheck || 0);
-          savedElapsedTimeBeforeSession = savedData.elapsedTimeBeforeCurrentSession || 0;
-          // savedIsRunning = savedData.isRunning;
-          // savedSessionStartTime = savedData.sessionStartTime;
+          // savedElapsedTimeBeforeSession = savedData.elapsedTimeBeforeCurrentSession || 0; // Not used for schedule-based init
         } catch (error) {
           console.error("Failed to parse saved data from localStorage", error);
           localStorage.removeItem(LOCAL_STORAGE_KEY);
@@ -101,14 +91,12 @@ export function useWageTracker() {
       }
       setInputs(initialSettings);
 
-      // Calculate state based on today's schedule and current time
       const now = new Date();
       const todayBaseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
       const todayWorkStartTimestamp = getTimestampForToday(initialSettings.workStartTime, todayBaseDate);
       let todayWorkEndTimestamp = getTimestampForToday(initialSettings.workEndTime, todayBaseDate);
 
-      // Basic overnight check: if end time is earlier than start time, assume it's for the next morning.
       if (todayWorkEndTimestamp <= todayWorkStartTimestamp) {
         const nextDayBaseDate = new Date(todayBaseDate);
         nextDayBaseDate.setDate(todayBaseDate.getDate() + 1);
@@ -121,44 +109,36 @@ export function useWageTracker() {
       let newCurrentTotalElapsedTime = 0;
       let newElapsedTimeBeforeCurrentSession = 0;
 
-
       if (currentTimestamp >= todayWorkStartTimestamp && currentTimestamp < todayWorkEndTimestamp) {
         newIsRunning = true;
-        newSessionStartTime = todayWorkStartTimestamp; // Effective start of tracking for today
-        newElapsedTimeBeforeCurrentSession = 0; // Reset for schedule-based calculation
+        newSessionStartTime = todayWorkStartTimestamp; 
         newCurrentTotalElapsedTime = (currentTimestamp - todayWorkStartTimestamp) / 1000;
-      } else if (currentTimestamp >= todayWorkEndTimestamp) { // After work hours
+      } else if (currentTimestamp >= todayWorkEndTimestamp) { 
         newIsRunning = false;
-        newSessionStartTime = null;
         const scheduledDurationToday = (todayWorkEndTimestamp - todayWorkStartTimestamp) / 1000;
         newCurrentTotalElapsedTime = scheduledDurationToday > 0 ? scheduledDurationToday : 0;
-        newElapsedTimeBeforeCurrentSession = newCurrentTotalElapsedTime; // Store completed work
-      } else { // Before work hours
+        newElapsedTimeBeforeCurrentSession = newCurrentTotalElapsedTime;
+      } else { 
         newIsRunning = false;
-        newSessionStartTime = null;
-        newCurrentTotalElapsedTime = 0;
-        newElapsedTimeBeforeCurrentSession = 0;
       }
-
-      // If user had manually paused with some accumulated time (savedElapsedTimeBeforeSession)
-      // AND the app is loading outside active schedule, restore that paused state.
-      // Otherwise, the schedule dictates.
-      if (!newIsRunning && savedElapsedTimeBeforeSession > 0 && currentTimestamp < todayWorkStartTimestamp) {
-          // If it's before work today, and there was a saved manual pause, show that.
-          // This behavior might be complex; for now, schedule mostly wins.
-          // Sticking to simpler "today's schedule rules on load" for now.
-          // So, newElapsedTimeBeforeCurrentSession as determined by schedule is fine.
-      }
-
 
       setIsRunning(newIsRunning);
       setSessionStartTime(newSessionStartTime);
       setCurrentTotalElapsedTime(newCurrentTotalElapsedTime);
-      setElapsedTimeBeforeCurrentSession(newElapsedTimeBeforeCurrentSession); // This is key for pause/resume logic
+      setElapsedTimeBeforeCurrentSession(newElapsedTimeBeforeCurrentSession); 
 
-      const hourlyWageNum = parseFloat(initialSettings.hourlyWage);
-      if (!isNaN(hourlyWageNum) && hourlyWageNum > 0) {
-        setCurrentEarnings((hourlyWageNum / 3600) * newCurrentTotalElapsedTime);
+      const monthlySalaryNum = parseFloat(initialSettings.monthlySalary);
+      const workDaysNum = parseInt(initialSettings.workDaysPerMonth, 10);
+
+      if (!isNaN(monthlySalaryNum) && monthlySalaryNum > 0 && !isNaN(workDaysNum) && workDaysNum > 0) {
+        const dailySalary = monthlySalaryNum / workDaysNum;
+        const scheduledDurationTodaySec = (todayWorkEndTimestamp - todayWorkStartTimestamp) / 1000;
+        if (scheduledDurationTodaySec > 0) {
+          const earningsRateToday = dailySalary / scheduledDurationTodaySec;
+          setCurrentEarnings(earningsRateToday * newCurrentTotalElapsedTime);
+        } else {
+          setCurrentEarnings(0);
+        }
       } else {
         setCurrentEarnings(0);
       }
@@ -170,12 +150,13 @@ export function useWageTracker() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const dataToSave: WageWatcherPersistentData = {
-        hourlyWage: parseFloat(inputs.hourlyWage) || DEFAULT_HOURLY_WAGE,
+        monthlySalary: parseFloat(inputs.monthlySalary) || DEFAULT_MONTHLY_SALARY,
+        workDaysPerMonth: parseInt(inputs.workDaysPerMonth, 10) || DEFAULT_WORK_DAYS_PER_MONTH,
         workStartTime: inputs.workStartTime,
         workEndTime: inputs.workEndTime,
         celebrationThreshold: parseFloat(inputs.celebrationThreshold) || DEFAULT_CELEBRATION_THRESHOLD,
-        isRunning, // Current actual running state
-        elapsedTimeBeforeCurrentSession, // Accumulated time from manual pauses
+        isRunning, 
+        elapsedTimeBeforeCurrentSession, 
         sessionStartTime: sessionStartTime || undefined,
         lastAnimationEarningsCheck,
         lastAnimationTimestamp,
@@ -189,40 +170,57 @@ export function useWageTracker() {
     if (isRunning && sessionStartTime) {
       const tick = () => {
         const now = Date.now();
-        // If sessionStartTime is from today's schedule, currentSessionDuration is time since schedule start
-        // If sessionStartTime is from manual start/resume, it's time since that manual action
-        const currentSessionDuration = (now - sessionStartTime) / 1000; // in seconds
+        const currentSessionDuration = (now - sessionStartTime) / 1000;
         const totalElapsedTime = elapsedTimeBeforeCurrentSession + currentSessionDuration;
         
         setCurrentTotalElapsedTime(totalElapsedTime);
 
-        const numericHourlyWage = parseFloat(inputs.hourlyWage);
-        if (!isNaN(numericHourlyWage) && numericHourlyWage > 0) {
-          const newEarnings = (numericHourlyWage / 3600) * totalElapsedTime;
-          setCurrentEarnings(newEarnings);
+        const numericMonthlySalary = parseFloat(inputs.monthlySalary);
+        const numericWorkDaysPerMonth = parseInt(inputs.workDaysPerMonth, 10);
 
-          const numericThreshold = parseFloat(inputs.celebrationThreshold);
-          if (!isNaN(numericThreshold) && numericThreshold > 0) {
-            const prevMilestone = Math.floor(lastAnimationEarningsCheck / numericThreshold);
-            const currentMilestone = Math.floor(newEarnings / numericThreshold);
+        if (!isNaN(numericMonthlySalary) && numericMonthlySalary > 0 && !isNaN(numericWorkDaysPerMonth) && numericWorkDaysPerMonth > 0) {
+          const dailySalary = numericMonthlySalary / numericWorkDaysPerMonth;
+          
+          const effectiveBaseDate = new Date(sessionStartTime); // Use session start time's date for schedule
+          const todayWorkStartTs = getTimestampForToday(inputs.workStartTime, effectiveBaseDate);
+          let todayWorkEndTs = getTimestampForToday(inputs.workEndTime, effectiveBaseDate);
+          if (todayWorkEndTs <= todayWorkStartTs) {
+            const nextDayBase = new Date(effectiveBaseDate);
+            nextDayBase.setDate(effectiveBaseDate.getDate() + 1);
+            todayWorkEndTs = getTimestampForToday(inputs.workEndTime, nextDayBase);
+          }
+          const scheduledDurationSecsToday = (todayWorkEndTs - todayWorkStartTs) / 1000;
 
-            if (currentMilestone > prevMilestone && newEarnings > lastAnimationEarningsCheck) {
-              const aiInput: AnimationOrchestratorInput = {
-                currentEarnings: newEarnings,
-                lastAnimationTimestamp: lastAnimationTimestamp,
-                threshold: numericThreshold,
-              };
-              shouldAnimate(aiInput).then(response => {
-                if (response.triggerAnimation) {
-                  setShowCelebration(true);
-                  setLastAnimationTimestamp(Date.now());
-                }
-              }).catch(err => {
-                console.error("AI animation check failed:", err);
-                toast({ title: "Animation Check Error", description: "Could not determine animation status.", variant: "destructive" });
-              });
-              setLastAnimationEarningsCheck(newEarnings);
+          if (scheduledDurationSecsToday > 0) {
+            const earningsRateForToday = dailySalary / scheduledDurationSecsToday;
+            const newEarnings = earningsRateForToday * totalElapsedTime;
+            setCurrentEarnings(newEarnings);
+
+            const numericThreshold = parseFloat(inputs.celebrationThreshold);
+            if (!isNaN(numericThreshold) && numericThreshold > 0) {
+              const prevMilestone = Math.floor(lastAnimationEarningsCheck / numericThreshold);
+              const currentMilestone = Math.floor(newEarnings / numericThreshold);
+
+              if (currentMilestone > prevMilestone && newEarnings > lastAnimationEarningsCheck) {
+                const aiInput: AnimationOrchestratorInput = {
+                  currentEarnings: newEarnings,
+                  lastAnimationTimestamp: lastAnimationTimestamp,
+                  threshold: numericThreshold,
+                };
+                shouldAnimate(aiInput).then(response => {
+                  if (response.triggerAnimation) {
+                    setShowCelebration(true);
+                    setLastAnimationTimestamp(Date.now());
+                  }
+                }).catch(err => {
+                  console.error("AI animation check failed:", err);
+                  toast({ title: "Animation Check Error", description: "Could not determine animation status.", variant: "destructive" });
+                });
+                setLastAnimationEarningsCheck(newEarnings);
+              }
             }
+          } else {
+             setCurrentEarnings(0); // No earnings if scheduled duration is zero or negative
           }
         }
         animationFrameId = requestAnimationFrame(tick);
@@ -230,32 +228,27 @@ export function useWageTracker() {
       animationFrameId = requestAnimationFrame(tick);
     }
     return () => cancelAnimationFrame(animationFrameId);
-  }, [isRunning, sessionStartTime, inputs.hourlyWage, inputs.celebrationThreshold, elapsedTimeBeforeCurrentSession, lastAnimationTimestamp, lastAnimationEarningsCheck, toast]);
+  }, [isRunning, sessionStartTime, inputs, elapsedTimeBeforeCurrentSession, lastAnimationTimestamp, lastAnimationEarningsCheck, toast]);
 
   const startTracking = useCallback(() => {
-    const numericHourlyWage = parseFloat(inputs.hourlyWage);
-    const now = new Date();
-    const todayBaseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const todayWorkStartTimestamp = getTimestampForToday(inputs.workStartTime, todayBaseDate);
+    const numericMonthlySalary = parseFloat(inputs.monthlySalary);
+    const numericWorkDaysPerMonth = parseInt(inputs.workDaysPerMonth, 10);
     
-    if (isNaN(numericHourlyWage) || numericHourlyWage <= 0) {
-      toast({ title: "Invalid Input", description: "Please enter a valid positive hourly wage.", variant: "destructive"});
+    if (isNaN(numericMonthlySalary) || numericMonthlySalary <= 0 || isNaN(numericWorkDaysPerMonth) || numericWorkDaysPerMonth <= 0) {
+      toast({ title: "Invalid Input", description: "Please enter valid positive values for monthly salary and work days.", variant: "destructive"});
       return;
     }
-
-    // If starting manually, it overrides the schedule-based state for the current session.
-    // elapsedTimeBeforeCurrentSession holds time accumulated from previous manual pauses *today*.
-    setSessionStartTime(Date.now()); // Start timing from *now* for this manual session segment
+    setSessionStartTime(Date.now());
     setIsRunning(true);
     
-  }, [inputs.hourlyWage, inputs.workStartTime, toast]);
+  }, [inputs, toast]);
 
   const stopTracking = useCallback(() => {
     if (sessionStartTime && isRunning) {
       const currentSessionDuration = (Date.now() - sessionStartTime) / 1000;
       const newTotalElapsed = elapsedTimeBeforeCurrentSession + currentSessionDuration;
-      setElapsedTimeBeforeCurrentSession(newTotalElapsed); // Accumulate time up to this pause
-      setCurrentTotalElapsedTime(newTotalElapsed); // Ensure display is updated
+      setElapsedTimeBeforeCurrentSession(newTotalElapsed); 
+      setCurrentTotalElapsedTime(newTotalElapsed); 
     }
     setSessionStartTime(null);
     setIsRunning(false);
@@ -271,7 +264,8 @@ export function useWageTracker() {
     setLastAnimationEarningsCheck(0);
     setLastAnimationTimestamp(0);
     setInputs({
-        hourlyWage: DEFAULT_HOURLY_WAGE.toString(),
+        monthlySalary: DEFAULT_MONTHLY_SALARY.toString(),
+        workDaysPerMonth: DEFAULT_WORK_DAYS_PER_MONTH.toString(),
         workStartTime: DEFAULT_WORK_START_TIME,
         workEndTime: DEFAULT_WORK_END_TIME,
         celebrationThreshold: DEFAULT_CELEBRATION_THRESHOLD.toString(),
@@ -280,8 +274,7 @@ export function useWageTracker() {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
     toast({ title: "Tracker Reset", description: "All data has been cleared." });
-    // After reset, useEffect for loading will run and set state based on defaults and current time
-    // For an immediate UI update reflecting reset to "before work" state:
+    
     const now = new Date();
     const todayBaseDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const todayWorkStartTimestamp = getTimestampForToday(DEFAULT_WORK_START_TIME, todayBaseDate);
@@ -290,7 +283,7 @@ export function useWageTracker() {
         setCurrentTotalElapsedTime(0);
         setCurrentEarnings(0);
         setElapsedTimeBeforeCurrentSession(0);
-    } // else the main load useEffect will handle it on next render cycle.
+    } 
 
   }, [toast]);
   
@@ -299,27 +292,40 @@ export function useWageTracker() {
     let newInputs = { ...inputs, [name]: value };
     setInputs(newInputs);
 
-    // If not running, recalculate earnings based on new inputs and currentTotalElapsedTime
-    // (which might be 0 if before work, or full duration if after work, or manually paused time)
     if (!isRunning) {
-        const currentHourlyWage = name === 'hourlyWage' ? parseFloat(value) : parseFloat(newInputs.hourlyWage);
-        // Recalculate total expected based on potentially new start/end times
-        // For current earnings, use currentTotalElapsedTime
-        if (!isNaN(currentHourlyWage) && currentHourlyWage > 0) {
-             setCurrentEarnings((currentHourlyWage / 3600) * currentTotalElapsedTime);
-        } else if (currentHourlyWage <=0 || (name === 'hourlyWage' && value === "")) {
+        const monthlySalaryNum = name === 'monthlySalary' ? parseFloat(value) : parseFloat(newInputs.monthlySalary);
+        const workDaysNum = name === 'workDaysPerMonth' ? parseInt(value, 10) : parseInt(newInputs.workDaysPerMonth, 10);
+
+        if (!isNaN(monthlySalaryNum) && monthlySalaryNum > 0 && !isNaN(workDaysNum) && workDaysNum > 0) {
+            const dailySalary = monthlySalaryNum / workDaysNum;
+            
+            const todayBase = new Date();
+            todayBase.setHours(0,0,0,0);
+            const workStartTs = getTimestampForToday(newInputs.workStartTime, todayBase);
+            let workEndTs = getTimestampForToday(newInputs.workEndTime, todayBase);
+            if (workEndTs <= workStartTs) {
+                 const tomorrow = new Date(todayBase);
+                 tomorrow.setDate(todayBase.getDate() + 1);
+                 workEndTs = getTimestampForToday(newInputs.workEndTime, tomorrow);
+            }
+            const scheduledDurationSecs = (workEndTs - workStartTs) / 1000;
+
+            if (scheduledDurationSecs > 0) {
+                const earningsRateToday = dailySalary / scheduledDurationSecs;
+                setCurrentEarnings(earningsRateToday * currentTotalElapsedTime); // currentTotalElapsedTime is from paused state
+            } else {
+                setCurrentEarnings(0);
+            }
+        } else if ( (name === 'monthlySalary' && (parseFloat(value) <= 0 || value === "")) || (name === 'workDaysPerMonth' && (parseInt(value, 10) <=0 || value === ""))) {
              setCurrentEarnings(0);
         }
-        // If times change while not running, we might need to re-evaluate currentTotalElapsedTime too.
-        // The load useEffect handles initial state. This handler is for changes while page is active.
-        // For simplicity, if time inputs change while paused, the earnings reflect the currentTotalElapsedTime
-        // with new wage. The schedule's impact on currentTotalElapsedTime updates on next load/start.
     }
   };
 
-  const numericHourlyWage = parseFloat(inputs.hourlyWage) || 0;
-  const earningsPerSecond = numericHourlyWage > 0 ? numericHourlyWage / 3600 : 0;
-  
+  const numericMonthlySalary = parseFloat(inputs.monthlySalary) || 0;
+  const numericWorkDaysPerMonth = parseInt(inputs.workDaysPerMonth, 10) || 1; // Avoid division by zero
+  const dailySalary = numericWorkDaysPerMonth > 0 ? numericMonthlySalary / numericWorkDaysPerMonth : 0;
+
   const todayBaseForDisplay = new Date();
   todayBaseForDisplay.setHours(0,0,0,0);
   const workStartTimestampForDisplay = getTimestampForToday(inputs.workStartTime, todayBaseForDisplay);
@@ -329,8 +335,10 @@ export function useWageTracker() {
       tomorrowBase.setDate(todayBaseForDisplay.getDate() + 1);
       workEndTimestampForDisplay = getTimestampForToday(inputs.workEndTime, tomorrowBase);
   }
-  const workDurationInSeconds = (workEndTimestampForDisplay - workStartTimestampForDisplay) / 1000;
-  const totalExpectedEarnings = numericHourlyWage * (workDurationInSeconds > 0 ? workDurationInSeconds / 3600 : 0);
+  const workDurationInSecondsForDay = (workEndTimestampForDisplay - workStartTimestampForDisplay) / 1000;
+  
+  const earningsPerSecond = workDurationInSecondsForDay > 0 ? dailySalary / workDurationInSecondsForDay : 0;
+  const totalExpectedEarnings = workDurationInSecondsForDay > 0 ? dailySalary : 0; // Expected earnings for one full scheduled day
 
   const progress = totalExpectedEarnings > 0 ? Math.min((currentEarnings / totalExpectedEarnings) * 100, 100) : 0;
 
