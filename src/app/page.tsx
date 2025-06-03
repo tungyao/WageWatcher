@@ -1,8 +1,10 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import type { ChangeEvent } from 'react';
 import { useWageTracker } from '@/hooks/use-wage-tracker';
+import type { WageTrackerInputs } from '@/hooks/use-wage-tracker';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,13 +12,16 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { FallingCoins } from '@/components/falling-coins';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock, CalendarDays } from 'lucide-react';
+import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock, CalendarDays, Download, Upload } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { useToast } from "@/hooks/use-toast";
+
 
 export default function WageWatcherPage() {
   const {
     inputs,
     handleInputChange,
+    loadSettings,
     isRunning,
     startTracking,
     stopTracking,
@@ -26,11 +31,83 @@ export default function WageWatcherPage() {
     setShowCelebration,
   } = useWageTracker();
 
+  const { toast } = useToast();
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(amount);
   };
+
+  const handleExportClick = () => {
+    try {
+      const settingsJson = JSON.stringify(inputs, null, 2);
+      const blob = new Blob([settingsJson], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'wagewatcher-settings.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast({ title: "配置已导出", description: "您的设置已保存到 wagewatcher-settings.json。" });
+    } catch (error) {
+      console.error("Export failed:", error);
+      toast({ title: "导出错误", description: "无法导出配置。", variant: "destructive" });
+    }
+  };
+
+  const handleImportButtonClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileImport = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const text = e.target?.result;
+        if (typeof text !== 'string') {
+          throw new Error("File content is not a string.");
+        }
+        const importedSettings = JSON.parse(text);
+
+        // Validate imported settings structure
+        if (
+          typeof importedSettings.monthlySalary === 'string' &&
+          typeof importedSettings.workDaysPerMonth === 'string' &&
+          typeof importedSettings.workStartTime === 'string' &&
+          typeof importedSettings.workEndTime === 'string' &&
+          typeof importedSettings.celebrationThreshold === 'string'
+        ) {
+          loadSettings(importedSettings as WageTrackerInputs);
+          // Toast is handled by loadSettings now
+          setIsSettingsModalOpen(false); // Close modal on successful import
+        } else {
+          throw new Error("Invalid file format or missing keys.");
+        }
+      } catch (error) {
+        console.error("Import failed:", error);
+        toast({ title: "导入错误", description: `无法导入配置: ${(error as Error).message}`, variant: "destructive" });
+      } finally {
+        // Reset file input to allow importing the same file again if needed
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      }
+    };
+    reader.onerror = () => {
+        toast({ title: "导入错误", description: "读取文件失败。", variant: "destructive" });
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+    }
+    reader.readAsText(file);
+  };
+
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4 sm:p-6 md:p-8 relative overflow-hidden font-body">
@@ -132,7 +209,22 @@ export default function WageWatcherPage() {
                 />
               </div>
             </div>
-            <DialogFooter>
+            <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={handleImportButtonClick}>
+                  <Upload className="mr-2 h-4 w-4" /> 导入配置
+                </Button>
+                <Input 
+                  type="file" 
+                  ref={fileInputRef} 
+                  onChange={handleFileImport} 
+                  accept=".json" 
+                  className="hidden" 
+                />
+                <Button type="button" variant="outline" onClick={handleExportClick}>
+                  <Download className="mr-2 h-4 w-4" /> 导出配置
+                </Button>
+              </div>
               <Button type="button" onClick={() => setIsSettingsModalOpen(false)}>
                 完成
               </Button>
@@ -196,4 +288,3 @@ export default function WageWatcherPage() {
     </div>
   );
 }
-
