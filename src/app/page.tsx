@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { FallingCoins } from '@/components/falling-coins';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings } from 'lucide-react';
+import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 export default function WageWatcherPage() {
@@ -61,35 +61,46 @@ export default function WageWatcherPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="modalHourlyWage" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
+                  <WalletCards className="w-4 h-4 mr-2 text-primary" /> Hourly Wage
+                </Label>
+                <Input
+                  id="modalHourlyWage"
+                  name="hourlyWage"
+                  type="number"
+                  value={inputs.hourlyWage}
+                  onChange={handleInputChange}
+                  placeholder="e.g., 25"
+                  className="bg-input"
+                  // Settings can be changed even if running, effective on next calculation cycle or manual restart
+                />
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="modalHourlyWage" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
-                    <WalletCards className="w-4 h-4 mr-2 text-primary" /> Hourly Wage
+                  <Label htmlFor="modalWorkStartTime" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
+                    <CalendarClock className="w-4 h-4 mr-2 text-primary" /> Work Start Time
                   </Label>
                   <Input
-                    id="modalHourlyWage"
-                    name="hourlyWage"
-                    type="number"
-                    value={inputs.hourlyWage}
+                    id="modalWorkStartTime"
+                    name="workStartTime"
+                    type="time"
+                    value={inputs.workStartTime}
                     onChange={handleInputChange}
-                    placeholder="e.g., 25"
                     className="bg-input"
-                    disabled={isRunning}
                   />
                 </div>
                 <div>
-                  <Label htmlFor="modalWorkDurationHours" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
-                    <Hourglass className="w-4 h-4 mr-2 text-primary" /> Work Duration (Hours)
+                  <Label htmlFor="modalWorkEndTime" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
+                    <CalendarClock className="w-4 h-4 mr-2 text-primary" /> Work End Time
                   </Label>
                   <Input
-                    id="modalWorkDurationHours"
-                    name="workDurationHours"
-                    type="number"
-                    value={inputs.workDurationHours}
+                    id="modalWorkEndTime"
+                    name="workEndTime"
+                    type="time"
+                    value={inputs.workEndTime}
                     onChange={handleInputChange}
-                    placeholder="e.g., 8"
                     className="bg-input"
-                    disabled={isRunning}
                   />
                 </div>
               </div>
@@ -105,7 +116,6 @@ export default function WageWatcherPage() {
                   onChange={handleInputChange}
                   placeholder="e.g., 100"
                   className="bg-input"
-                  disabled={isRunning}
                 />
               </div>
             </div>
@@ -117,7 +127,7 @@ export default function WageWatcherPage() {
           </DialogContent>
         </Dialog>
         
-        <div className="flex flex-col sm:flex-row gap-3 pt-8"> {/* Added pt-8 to give space for settings icon if card is small */}
+        <div className="flex flex-col sm:flex-row gap-3 pt-8">
           <Button onClick={isRunning ? stopTracking : startTracking} className="flex-1" size="lg">
             {isRunning ? <Pause className="mr-2 h-5 w-5" /> : <Play className="mr-2 h-5 w-5" />}
             {isRunning ? 'Pause' : 'Start Tracking'}
@@ -131,7 +141,7 @@ export default function WageWatcherPage() {
 
         <section aria-labelledby="earnings-display" className="text-center">
           <h2 id="earnings-display" className="sr-only">Earnings Display</h2>
-          <p className="text-sm text-muted-foreground mb-1">Total Earned</p>
+          <p className="text-sm text-muted-foreground mb-1">Total Earned Today</p>
           <p className="text-5xl sm:text-6xl font-bold text-primary tracking-tight">
             {formatCurrency(displayData.currentEarnings)}
           </p>
@@ -143,7 +153,7 @@ export default function WageWatcherPage() {
             <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center text-muted-foreground">
                 <Clock className="w-5 h-5 mr-2 text-accent" />
-                <span>Elapsed Time</span>
+                <span>Elapsed Time (Today)</span>
               </div>
               <span className="font-semibold text-foreground">{displayData.elapsedTimeFormatted}</span>
             </div>
@@ -159,10 +169,10 @@ export default function WageWatcherPage() {
           
           <div className="mt-4">
             <div className="flex justify-between text-sm text-muted-foreground mb-1">
-              <span>Progress</span>
+              <span>Progress (Today's Goal)</span>
               <span>{formatCurrency(displayData.totalExpectedEarnings)} Goal</span>
             </div>
-            <Progress value={displayData.progress} aria-label={`Earnings progress: ${displayData.progress.toFixed(0)}%`} className="w-full h-3"/>
+            <Progress value={displayData.progress} aria-label={`Today's earnings progress: ${displayData.progress.toFixed(0)}%`} className="w-full h-3"/>
           </div>
         </section>
       </main>
@@ -173,4 +183,3 @@ export default function WageWatcherPage() {
     </div>
   );
 }
-
