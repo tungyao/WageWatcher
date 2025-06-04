@@ -88,3 +88,7 @@ body {
   }
 }
 
+.tabular-numbers {
+  font-variant-numeric: tabular-nums;
+}
+

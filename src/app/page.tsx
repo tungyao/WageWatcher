@@ -280,14 +280,14 @@ export default function WageWatcherPage() {
         <section aria-labelledby="earnings-display" className="text-center">
           <h2 id="earnings-display" className="sr-only">收入显示</h2>
           <p className="text-sm text-muted-foreground mb-1">今日总收入</p>
-          <p className="text-5xl sm:text-6xl font-bold text-primary tracking-tight">
+          <p className="text-5xl sm:text-6xl font-bold text-primary tracking-tight tabular-numbers">
             {formatCurrency(displayData.currentEarnings, inputs.decimalPlaces)}
           </p>
         </section>
 
         <section aria-labelledby="metrics-panel">
           <h2 id="metrics-panel" className="sr-only">详细指标</h2>
-          <div className="space-y-3">
+          <div className="space-y-3 tabular-numbers">
             <div className="flex justify-between items-center p-3 bg-muted/30 rounded-lg">
               <div className="flex items-center text-muted-foreground">
                 <Clock className="w-5 h-5 mr-2 text-accent" />
@@ -307,7 +307,7 @@ export default function WageWatcherPage() {
           
           <div className="mt-4">
             <div className="flex justify-between text-sm text-muted-foreground mb-1">
-              <span>进度 (今日目标)</span>
+              <span className="tabular-numbers">进度 (今日目标)</span>
               <span>{formatCurrency(displayData.totalExpectedEarnings, inputs.decimalPlaces)} 目标</span>
             </div>
             <Progress value={displayData.progress} aria-label={`今日收入进度: ${displayData.progress.toFixed(0)}%`} className="w-full h-3"/>
