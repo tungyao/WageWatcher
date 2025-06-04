@@ -6,13 +6,14 @@ import { shouldAnimate } from '@/ai/flows/animation-orchestrator';
 import type { AnimationOrchestratorInput } from '@/ai/flows/animation-orchestrator';
 import { useToast } from '@/hooks/use-toast';
 
-const LOCAL_STORAGE_KEY = 'wageWatcherDataV5'; // Incremented version for new logic
+const LOCAL_STORAGE_KEY = 'wageWatcherDataV6'; // Incremented version for new field
 
 const DEFAULT_MONTHLY_SALARY = 5000;
 const DEFAULT_WORK_DAYS_PER_MONTH = 22;
 const DEFAULT_WORK_START_TIME = "09:00";
 const DEFAULT_WORK_END_TIME = "17:00";
 const DEFAULT_CELEBRATION_THRESHOLD = 100;
+const DEFAULT_DECIMAL_PLACES = 2;
 
 export type WageTrackerInputs = {
   monthlySalary: string;
@@ -20,6 +21,7 @@ export type WageTrackerInputs = {
   workStartTime: string;
   workEndTime: string;
   celebrationThreshold: string;
+  decimalPlaces: string;
 };
 
 type WageWatcherPersistentData = {
@@ -28,14 +30,14 @@ type WageWatcherPersistentData = {
   workStartTime: string;
   workEndTime: string;
   celebrationThreshold: number;
-  isRunning: boolean; // To store manual override state
+  decimalPlaces: number;
+  isRunning: boolean; 
   elapsedTimeBeforeCurrentSession: number;
-  sessionStartTime?: number; // Timestamp of when current manual session started or when scheduled session started
+  sessionStartTime?: number; 
   lastAnimationEarningsCheck: number;
   lastAnimationTimestamp: number;
 };
 
-// Helper to get a timestamp for a specific time string on a given base date
 const getTimestampForTimeOnDate = (timeStr: string, baseDate: Date): number => {
     const [hours, minutes] = timeStr.split(':').map(Number);
     if (isNaN(hours) || isNaN(minutes)) {
@@ -58,13 +60,14 @@ export function useWageTracker() {
     workStartTime: DEFAULT_WORK_START_TIME,
     workEndTime: DEFAULT_WORK_END_TIME,
     celebrationThreshold: DEFAULT_CELEBRATION_THRESHOLD.toString(),
+    decimalPlaces: DEFAULT_DECIMAL_PLACES.toString(),
   });
 
   const [isRunning, setIsRunning] = useState(false);
   const [elapsedTimeBeforeCurrentSession, setElapsedTimeBeforeCurrentSession] = useState(0);
-  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null); // When the current *tracking* session began
+  const [sessionStartTime, setSessionStartTime] = useState<number | null>(null); 
 
-  const [currentTotalElapsedTime, setCurrentTotalElapsedTime] = useState(0); // Total tracked time for the relevant work period
+  const [currentTotalElapsedTime, setCurrentTotalElapsedTime] = useState(0); 
   const [currentEarnings, setCurrentEarnings] = useState(0);
 
   const [showCelebration, setShowCelebration] = useState(false);
@@ -75,7 +78,6 @@ export function useWageTracker() {
     const now = new Date();
     const nowTs = now.getTime();
 
-    // Determine Session A (potential shift starting today)
     const sessionA_startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const sessionA_startTs = getTimestampForTimeOnDate(currentSettings.workStartTime, sessionA_startDate);
     let sessionA_endTs = getTimestampForTimeOnDate(currentSettings.workEndTime, sessionA_startDate);
@@ -85,7 +87,6 @@ export function useWageTracker() {
         sessionA_endTs = getTimestampForTimeOnDate(currentSettings.workEndTime, endDateA);
     }
 
-    // Determine Session B (potential shift starting yesterday and spilling into today)
     const sessionB_startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     sessionB_startDate.setDate(sessionB_startDate.getDate() - 1);
     const sessionB_startTs = getTimestampForTimeOnDate(currentSettings.workStartTime, sessionB_startDate);
@@ -100,44 +101,44 @@ export function useWageTracker() {
     let newSessionStartTime: number | null = null;
     let newCurrentTotalElapsedTime = 0;
     let newElapsedTimeBeforeCurrentSession = 0;
-    let relevantScheduledSessionStartTs = sessionA_startTs; // Default to today's shift for calculations
+    let relevantScheduledSessionStartTs = sessionA_startTs; 
     let relevantScheduledSessionEndTs = sessionA_endTs;
 
 
-    if (nowTs >= sessionA_startTs && nowTs < sessionA_endTs) { // Currently in Session A
+    if (nowTs >= sessionA_startTs && nowTs < sessionA_endTs) { 
         newIsRunning = true;
-        newSessionStartTime = sessionA_startTs; // Track from scheduled start of this block
+        newSessionStartTime = sessionA_startTs; 
         newCurrentTotalElapsedTime = (nowTs - sessionA_startTs) / 1000;
         relevantScheduledSessionStartTs = sessionA_startTs;
         relevantScheduledSessionEndTs = sessionA_endTs;
-    } else if (nowTs >= sessionB_startTs && nowTs < sessionB_endTs) { // Currently in Session B
+    } else if (nowTs >= sessionB_startTs && nowTs < sessionB_endTs) { 
         newIsRunning = true;
-        newSessionStartTime = sessionB_startTs; // Track from scheduled start of this block
+        newSessionStartTime = sessionB_startTs; 
         newCurrentTotalElapsedTime = (nowTs - sessionB_startTs) / 1000;
         relevantScheduledSessionStartTs = sessionB_startTs;
         relevantScheduledSessionEndTs = sessionB_endTs;
-    } else { // Not currently in a scheduled work period
+    } else { 
         newIsRunning = false;
         newSessionStartTime = null;
-        // Determine if we are after today's shift or before it
-        if (nowTs >= sessionA_endTs) { // After today's scheduled shift
+        
+        if (nowTs >= sessionA_endTs) { 
             newCurrentTotalElapsedTime = (sessionA_endTs - sessionA_startTs) / 1000;
             relevantScheduledSessionStartTs = sessionA_startTs;
             relevantScheduledSessionEndTs = sessionA_endTs;
-        } else { // Before today's shift (and not in yesterday's spillover)
+        } else { 
             newCurrentTotalElapsedTime = 0;
-            relevantScheduledSessionStartTs = sessionA_startTs; // Used for "total expected"
+            relevantScheduledSessionStartTs = sessionA_startTs; 
             relevantScheduledSessionEndTs = sessionA_endTs;
         }
         newElapsedTimeBeforeCurrentSession = newCurrentTotalElapsedTime > 0 ? newCurrentTotalElapsedTime : 0;
     }
     
     setIsRunning(newIsRunning);
-    setSessionStartTime(newSessionStartTime); // This is when the *scheduled* block started if auto-started
+    setSessionStartTime(newSessionStartTime); 
     setCurrentTotalElapsedTime(newCurrentTotalElapsedTime);
     setElapsedTimeBeforeCurrentSession(newElapsedTimeBeforeCurrentSession);
 
-    // Reset animation checks on any reinitialization
+    
     setLastAnimationEarningsCheck(0);
     setLastAnimationTimestamp(0);
 
@@ -168,6 +169,7 @@ export function useWageTracker() {
         workStartTime: DEFAULT_WORK_START_TIME,
         workEndTime: DEFAULT_WORK_END_TIME,
         celebrationThreshold: DEFAULT_CELEBRATION_THRESHOLD.toString(),
+        decimalPlaces: DEFAULT_DECIMAL_PLACES.toString(),
       };
       
       if (savedDataRaw) {
@@ -179,15 +181,12 @@ export function useWageTracker() {
             workStartTime: savedData.workStartTime || DEFAULT_WORK_START_TIME,
             workEndTime: savedData.workEndTime || DEFAULT_WORK_END_TIME,
             celebrationThreshold: (savedData.celebrationThreshold || DEFAULT_CELEBRATION_THRESHOLD).toString(),
+            decimalPlaces: (savedData.decimalPlaces || DEFAULT_DECIMAL_PLACES).toString(),
           };
-          // These are for animation persistence, reinitializeTrackerState will reset them if needed for a fresh calc
+          
           setLastAnimationTimestamp(savedData.lastAnimationTimestamp || 0);
           setLastAnimationEarningsCheck(savedData.lastAnimationEarningsCheck || 0);
           
-          // Restore manual tracking state if it was persisted
-          // This part is tricky because reinitializeTrackerState will override based on schedule.
-          // For now, let reinitialize handle the "auto-start" based on schedule for consistency.
-          // Manual overrides via start/stop buttons will then take effect.
         } catch (error) {
           console.error("Failed to parse saved data from localStorage", error);
           localStorage.removeItem(LOCAL_STORAGE_KEY); 
@@ -208,6 +207,7 @@ export function useWageTracker() {
         workStartTime: inputs.workStartTime,
         workEndTime: inputs.workEndTime,
         celebrationThreshold: parseFloat(inputs.celebrationThreshold) || DEFAULT_CELEBRATION_THRESHOLD,
+        decimalPlaces: parseInt(inputs.decimalPlaces, 10) || DEFAULT_DECIMAL_PLACES,
         isRunning, 
         elapsedTimeBeforeCurrentSession, 
         sessionStartTime: sessionStartTime || undefined, 
@@ -220,11 +220,10 @@ export function useWageTracker() {
 
   useEffect(() => {
     let animationFrameId: number;
-    if (isRunning && sessionStartTime !== null) { // Ensure sessionStartTime is not null
+    if (isRunning && sessionStartTime !== null) { 
       const tick = () => {
         const now = Date.now();
-        // If sessionStartTime is the start of a scheduled block, elapsedTimeBeforeCurrentSession is 0.
-        // If it's a manually resumed session, elapsedTimeBeforeCurrentSession has prior time.
+        
         const currentSessionDuration = (now - sessionStartTime) / 1000; 
         const totalElapsedTime = elapsedTimeBeforeCurrentSession + currentSessionDuration;
         
@@ -236,51 +235,22 @@ export function useWageTracker() {
         if (!isNaN(numericMonthlySalary) && numericMonthlySalary > 0 && !isNaN(numericWorkDaysPerMonth) && numericWorkDaysPerMonth > 0) {
           const dailySalary = numericMonthlySalary / numericWorkDaysPerMonth;
           
-          // Determine the scheduled work period that sessionStartTime falls into or refers to
-          const baseDateForCalc = new Date(sessionStartTime); // Base on when this tracking session's context started
-          const workStartTsForCalc = getTimestampForTimeOnDate(inputs.workStartTime, baseDateForCalc);
-          let workEndTsForCalc = getTimestampForTimeOnDate(inputs.workEndTime, baseDateForCalc);
-
-          if (workEndTsForCalc <= workStartTsForCalc) { // Shift crosses midnight
-             // If sessionStartTime is for today's 9-5, baseDateForCalc is today. start=today 9am, end=today 5pm.
-             // If sessionStartTime is for yesterday's 10pm-6am, baseDateForCalc is yesterday 10pm. start=yesterday 10pm, end=today 6am.
-             // This logic needs to ensure workEndTsForCalc is correctly after workStartTsForCalc for THAT shift.
-            if (sessionStartTime < getTimestampForTimeOnDate(inputs.workEndTime, baseDateForCalc) ) { 
-                 // This means workEndTime is early AM, and session started previous day.
-                 // Example: work 22:00-06:00. sessionStartTime is 22:00 on Day X. baseDateForCalc is Day X.
-                 // workStartTsForCalc = Day X 22:00. workEndTsForCalc = Day X 06:00 (wrong).
-                 // It should be Day X+1 06:00.
-                 const endDateForCalc = new Date(baseDateForCalc);
-                 endDateForCalc.setDate(baseDateForCalc.getDate() + 1);
-                 workEndTsForCalc = getTimestampForTimeOnDate(inputs.workEndTime, endDateForCalc);
-
-            } else { // Standard overnight shift starting on baseDateForCalc
-                 const endDateForCalc = new Date(baseDateForCalc);
-                 endDateForCalc.setDate(baseDateForCalc.getDate() + 1);
-                 workEndTsForCalc = getTimestampForTimeOnDate(inputs.workEndTime, endDateForCalc);
-            }
-          }
-          // Fallback if workStartTsForCalc itself was based on a "today" that mismatches sessionStartTime's actual day
-          // This happens if reinitialize sets sessionStartTime to e.g. yesterday 10pm, but then this tick runs.
-          // We need the schedule parameters for *that specific shift*.
-          // The `relevantScheduledSessionStartTs` and `EndTs` from reinitialization are better.
-          // Let's use values based on inputs and current interpretation of "today" or "current shift".
           const currentDay = new Date();
           let shiftStart = getTimestampForTimeOnDate(inputs.workStartTime, currentDay);
           let shiftEnd = getTimestampForTimeOnDate(inputs.workEndTime, currentDay);
-          if (shiftEnd <= shiftStart) { // Today's shift crosses midnight
+          if (shiftEnd <= shiftStart) { 
             const shiftEndDate = new Date(currentDay);
             shiftEndDate.setDate(currentDay.getDate() + 1);
             shiftEnd = getTimestampForTimeOnDate(inputs.workEndTime, shiftEndDate);
           }
-          // Check if current time is actually part of yesterday's shift spilling over
+          
           if (now < shiftStart) {
             const yesterday = new Date(currentDay);
             yesterday.setDate(currentDay.getDate() -1);
             const yesterdayShiftStart = getTimestampForTimeOnDate(inputs.workStartTime, yesterday);
             let yesterdayShiftEnd = getTimestampForTimeOnDate(inputs.workEndTime, yesterday);
             if(yesterdayShiftEnd <= yesterdayShiftStart) {
-                 yesterdayShiftEnd = getTimestampForTimeOnDate(inputs.workEndTime, currentDay); // ends today
+                 yesterdayShiftEnd = getTimestampForTimeOnDate(inputs.workEndTime, currentDay); 
             }
             if (now >= yesterdayShiftStart && now < yesterdayShiftEnd) {
                 shiftStart = yesterdayShiftStart;
@@ -338,8 +308,6 @@ export function useWageTracker() {
       return;
     }
     
-    // When manually starting, current elapsedTimeBeforeCurrentSession is preserved.
-    // Session starts NOW.
     setSessionStartTime(Date.now()); 
     setIsRunning(true);
     
@@ -350,7 +318,7 @@ export function useWageTracker() {
       const currentSessionDuration = (Date.now() - sessionStartTime) / 1000;
       const newTotalElapsed = elapsedTimeBeforeCurrentSession + currentSessionDuration;
       setElapsedTimeBeforeCurrentSession(newTotalElapsed); 
-      setCurrentTotalElapsedTime(newTotalElapsed); // Update display immediately
+      setCurrentTotalElapsedTime(newTotalElapsed); 
     }
     setSessionStartTime(null);
     setIsRunning(false);
@@ -371,6 +339,7 @@ export function useWageTracker() {
         workStartTime: DEFAULT_WORK_START_TIME,
         workEndTime: DEFAULT_WORK_END_TIME,
         celebrationThreshold: DEFAULT_CELEBRATION_THRESHOLD.toString(),
+        decimalPlaces: DEFAULT_DECIMAL_PLACES.toString(),
     };
     setInputs(defaultSettings);
     if (typeof window !== 'undefined') {
@@ -386,11 +355,8 @@ export function useWageTracker() {
     const newInputs = { ...inputs, [name]: value };
     setInputs(newInputs);
 
-    if (['monthlySalary', 'workDaysPerMonth', 'workStartTime', 'workEndTime'].includes(name)) {
+    if (['monthlySalary', 'workDaysPerMonth', 'workStartTime', 'workEndTime', 'celebrationThreshold'].includes(name)) {
         reinitializeTrackerState(newInputs);
-    } else if (name === 'celebrationThreshold' && !isRunning) {
-        // Only recalculate earnings if not running for threshold changes if needed,
-        // but reinitialize already handles earnings. Animation logic will pick up new threshold.
     }
   };
 
@@ -405,7 +371,7 @@ export function useWageTracker() {
   const numericWorkDaysPerMonth = parseInt(inputs.workDaysPerMonth, 10) || 1; 
   const dailySalary = numericWorkDaysPerMonth > 0 ? numericMonthlySalary / numericWorkDaysPerMonth : 0;
 
-  // For display purposes, calculate "today's" total expected earnings and scheduled duration
+  
   const displayBaseDate = new Date();
   const displayWorkStartTs = getTimestampForTimeOnDate(inputs.workStartTime, displayBaseDate);
   let displayWorkEndTs = getTimestampForTimeOnDate(inputs.workEndTime, displayBaseDate);

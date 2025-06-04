@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { FallingCoins } from '@/components/falling-coins';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock, CalendarDays, Download, Upload } from 'lucide-react';
+import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock, CalendarDays, Download, Upload, AlertTriangle, Pipette } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from "@/hooks/use-toast";
 
@@ -35,8 +35,12 @@ export default function WageWatcherPage() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY' }).format(amount);
+  const formatCurrency = (amount: number, decimalPlaces?: string) => {
+    const places = decimalPlaces ? parseInt(decimalPlaces, 10) : 2;
+    if (isNaN(places) || places < 0 || places > 20) { // Added sanity check for places
+        return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+    }
+    return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: places, maximumFractionDigits: places }).format(amount);
   };
 
   const handleExportClick = () => {
@@ -75,25 +79,27 @@ export default function WageWatcherPage() {
         }
         const importedSettings = JSON.parse(text);
 
-        // Validate imported settings structure
         if (
           typeof importedSettings.monthlySalary === 'string' &&
           typeof importedSettings.workDaysPerMonth === 'string' &&
           typeof importedSettings.workStartTime === 'string' &&
           typeof importedSettings.workEndTime === 'string' &&
-          typeof importedSettings.celebrationThreshold === 'string'
+          typeof importedSettings.celebrationThreshold === 'string' &&
+          typeof importedSettings.decimalPlaces === 'string' 
         ) {
+          const parsedDecimalPlaces = parseInt(importedSettings.decimalPlaces, 10);
+          if (isNaN(parsedDecimalPlaces) || parsedDecimalPlaces < 0 || parsedDecimalPlaces > 20) {
+            throw new Error("无效的小数位数。请输入0到20之间的数字。");
+          }
           loadSettings(importedSettings as WageTrackerInputs);
-          // Toast is handled by loadSettings now
-          setIsSettingsModalOpen(false); // Close modal on successful import
+          setIsSettingsModalOpen(false); 
         } else {
-          throw new Error("Invalid file format or missing keys.");
+          throw new Error("无效的文件格式或缺少键。");
         }
       } catch (error) {
         console.error("Import failed:", error);
         toast({ title: "导入错误", description: `无法导入配置: ${(error as Error).message}`, variant: "destructive" });
       } finally {
-        // Reset file input to allow importing the same file again if needed
         if (fileInputRef.current) {
           fileInputRef.current.value = "";
         }
@@ -208,6 +214,33 @@ export default function WageWatcherPage() {
                   className="bg-input"
                 />
               </div>
+              <div>
+                <Label htmlFor="modalDecimalPlaces" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
+                  <Pipette className="w-4 h-4 mr-2 text-primary" /> 小数位数 (0-20)
+                </Label>
+                <Input
+                  id="modalDecimalPlaces"
+                  name="decimalPlaces"
+                  type="number"
+                  min="0"
+                  max="20"
+                  step="1"
+                  value={inputs.decimalPlaces}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    if (val >= 0 && val <= 20) {
+                      handleInputChange(e);
+                    } else if (e.target.value === "") { // Allow empty input to clear
+                       handleInputChange(e);
+                    } else {
+                      // Optionally, provide feedback if value is out of range
+                      toast({ title: "输入无效", description: "小数位数必须在0到20之间。", variant: "destructive"});
+                    }
+                  }}
+                  placeholder="例如, 2"
+                  className="bg-input"
+                />
+              </div>
             </div>
             <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
               <div className="flex gap-2">
@@ -248,7 +281,7 @@ export default function WageWatcherPage() {
           <h2 id="earnings-display" className="sr-only">收入显示</h2>
           <p className="text-sm text-muted-foreground mb-1">今日总收入</p>
           <p className="text-5xl sm:text-6xl font-bold text-primary tracking-tight">
-            {formatCurrency(displayData.currentEarnings)}
+            {formatCurrency(displayData.currentEarnings, inputs.decimalPlaces)}
           </p>
         </section>
 
@@ -268,14 +301,14 @@ export default function WageWatcherPage() {
                 <TrendingUp className="w-5 h-5 mr-2 text-accent" />
                 <span>每秒收入</span>
               </div>
-              <span className="font-semibold text-foreground">{formatCurrency(displayData.earningsPerSecond)}</span>
+              <span className="font-semibold text-foreground">{formatCurrency(displayData.earningsPerSecond, inputs.decimalPlaces)}</span>
             </div>
           </div>
           
           <div className="mt-4">
             <div className="flex justify-between text-sm text-muted-foreground mb-1">
               <span>进度 (今日目标)</span>
-              <span>{formatCurrency(displayData.totalExpectedEarnings)} 目标</span>
+              <span>{formatCurrency(displayData.totalExpectedEarnings, inputs.decimalPlaces)} 目标</span>
             </div>
             <Progress value={displayData.progress} aria-label={`今日收入进度: ${displayData.progress.toFixed(0)}%`} className="w-full h-3"/>
           </div>
@@ -288,3 +321,4 @@ export default function WageWatcherPage() {
     </div>
   );
 }
+
