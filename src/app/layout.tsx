@@ -28,8 +28,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en"> {/* Default lang, will be overridden by [locale] layout */}
-      <body>
+    <html lang="en">{/* Default lang, will be overridden by [locale] layout */}<body>
         {children}
       </body>
     </html>
