@@ -2,11 +2,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-// import { shouldAnimate } from '@/ai/flows/animation-orchestrator'; // AI feature disabled for static export
-// import type { AnimationOrchestratorInput } from '@/ai/flows/animation-orchestrator'; // AI feature disabled for static export
-import { useToast } from '@/hooks/use-toast';
+// AI feature disabled for static export
+// import { shouldAnimate } from '@/ai/flows/animation-orchestrator'; 
+// import type { AnimationOrchestratorInput } from '@/ai/flows/animation-orchestrator'; 
+import { useToast as useShadcnToast } from "@/hooks/use-toast"; // Renamed
+import { useTranslations } from 'next-intl';
 
-const LOCAL_STORAGE_KEY = 'wageWatcherDataV6'; 
+
+const LOCAL_STORAGE_KEY = 'wageWatcherDataV7'; // Incremented version for new structure
 
 const DEFAULT_MONTHLY_SALARY = 5000;
 const DEFAULT_WORK_DAYS_PER_MONTH = 22;
@@ -52,7 +55,8 @@ const getTimestampForTimeOnDate = (timeStr: string, baseDate: Date): number => {
 
 
 export function useWageTracker() {
-  const { toast } = useToast();
+  const t = useTranslations('Toasts'); // For toast messages
+  const { toast } = useShadcnToast();
 
   const [inputs, setInputs] = useState<WageTrackerInputs>({
     monthlySalary: DEFAULT_MONTHLY_SALARY.toString(),
@@ -157,6 +161,7 @@ export function useWageTracker() {
     } else {
         setCurrentEarnings(0);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setIsRunning, setSessionStartTime, setCurrentTotalElapsedTime, setElapsedTimeBeforeCurrentSession, setCurrentEarnings, setLastAnimationEarningsCheck, setLastAnimationTimestamp]);
 
 
@@ -181,7 +186,7 @@ export function useWageTracker() {
             workStartTime: savedData.workStartTime || DEFAULT_WORK_START_TIME,
             workEndTime: savedData.workEndTime || DEFAULT_WORK_END_TIME,
             celebrationThreshold: (savedData.celebrationThreshold || DEFAULT_CELEBRATION_THRESHOLD).toString(),
-            decimalPlaces: (savedData.decimalPlaces || DEFAULT_DECIMAL_PLACES).toString(),
+            decimalPlaces: (savedData.decimalPlaces ?? DEFAULT_DECIMAL_PLACES).toString(), // Use ?? for new fields
           };
           
           setLastAnimationTimestamp(savedData.lastAnimationTimestamp || 0);
@@ -207,7 +212,7 @@ export function useWageTracker() {
         workStartTime: inputs.workStartTime,
         workEndTime: inputs.workEndTime,
         celebrationThreshold: parseFloat(inputs.celebrationThreshold) || DEFAULT_CELEBRATION_THRESHOLD,
-        decimalPlaces: parseInt(inputs.decimalPlaces, 10) || DEFAULT_DECIMAL_PLACES,
+        decimalPlaces: parseInt(inputs.decimalPlaces, 10) ?? DEFAULT_DECIMAL_PLACES,
         isRunning, 
         elapsedTimeBeforeCurrentSession, 
         sessionStartTime: sessionStartTime || undefined, 
@@ -272,26 +277,7 @@ export function useWageTracker() {
               const currentMilestone = Math.floor(newEarnings / numericThreshold);
 
               if (currentMilestone > prevMilestone && newEarnings > lastAnimationEarningsCheck) {
-                // AI feature for animations is disabled for static export.
-                // To re-enable, this would need to call a separate backend API.
-                // For now, we can trigger a simpler, non-AI based celebration:
-                // const aiInput: AnimationOrchestratorInput = {
-                //   currentEarnings: newEarnings,
-                //   lastAnimationTimestamp: lastAnimationTimestamp,
-                //   threshold: numericThreshold,
-                // };
-                // shouldAnimate(aiInput).then(response => { // This line would call the AI flow
-                //   if (response.triggerAnimation) {
-                //     setShowCelebration(true);
-                //     setLastAnimationTimestamp(Date.now());
-                //   }
-                // }).catch(err => {
-                //   console.error("AI animation check failed:", err);
-                // });
-                
-                // Simplified celebration logic for static export:
-                // Trigger animation if enough time has passed since the last one, e.g., 1 minute (60000 ms)
-                const MIN_ANIMATION_INTERVAL = 60000; // 1 minute
+                const MIN_ANIMATION_INTERVAL = 60000; 
                 if (Date.now() - lastAnimationTimestamp > MIN_ANIMATION_INTERVAL) {
                     setShowCelebration(true);
                     setLastAnimationTimestamp(Date.now());
@@ -308,21 +294,22 @@ export function useWageTracker() {
       animationFrameId = requestAnimationFrame(tick);
     }
     return () => cancelAnimationFrame(animationFrameId);
-  }, [isRunning, sessionStartTime, inputs, elapsedTimeBeforeCurrentSession, lastAnimationTimestamp, lastAnimationEarningsCheck, toast]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRunning, sessionStartTime, inputs, elapsedTimeBeforeCurrentSession, lastAnimationTimestamp, lastAnimationEarningsCheck]);
 
   const startTracking = useCallback(() => {
     const numericMonthlySalary = parseFloat(inputs.monthlySalary);
     const numericWorkDaysPerMonth = parseInt(inputs.workDaysPerMonth, 10);
     
     if (isNaN(numericMonthlySalary) || numericMonthlySalary <= 0 || isNaN(numericWorkDaysPerMonth) || numericWorkDaysPerMonth <= 0) {
-      toast({ title: "无效输入", description: "请输入有效的月薪和工作天数。", variant: "destructive"});
+      toast({ title: t("invalidInputTitle"), description: t("invalidInputMessage"), variant: "destructive"});
       return;
     }
     
     setSessionStartTime(Date.now()); 
     setIsRunning(true);
     
-  }, [inputs, toast]);
+  }, [inputs, toast, t]);
 
   const stopTracking = useCallback(() => {
     if (sessionStartTime && isRunning) {
@@ -356,17 +343,17 @@ export function useWageTracker() {
     if (typeof window !== 'undefined') {
       localStorage.removeItem(LOCAL_STORAGE_KEY);
     }
-    toast({ title: "追踪器已重置", description: "所有数据已被清除。" });
+    toast({ title: t("resetSuccessTitle"), description: t("resetSuccessMessage") });
     reinitializeTrackerState(defaultSettings);
 
-  }, [toast, reinitializeTrackerState]);
+  }, [toast, t, reinitializeTrackerState]);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     const newInputs = { ...inputs, [name]: value };
     setInputs(newInputs);
 
-    if (['monthlySalary', 'workDaysPerMonth', 'workStartTime', 'workEndTime', 'celebrationThreshold'].includes(name)) {
+    if (['monthlySalary', 'workDaysPerMonth', 'workStartTime', 'workEndTime', 'celebrationThreshold', 'decimalPlaces'].includes(name)) {
         reinitializeTrackerState(newInputs);
     }
   };
@@ -374,8 +361,9 @@ export function useWageTracker() {
   const loadSettings = useCallback((newSettings: WageTrackerInputs) => {
     setInputs(newSettings);
     reinitializeTrackerState(newSettings); 
-    toast({ title: "配置已加载", description: "新设置已应用。" });
-  }, [setInputs, reinitializeTrackerState, toast]);
+    toast({ title: t("loadSuccessTitle"), description: t("loadSuccessMessage") });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setInputs, reinitializeTrackerState, toast, t]);
 
 
   const numericMonthlySalary = parseFloat(inputs.monthlySalary) || 0;
