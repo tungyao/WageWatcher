@@ -2,11 +2,11 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { shouldAnimate } from '@/ai/flows/animation-orchestrator';
-import type { AnimationOrchestratorInput } from '@/ai/flows/animation-orchestrator';
+// import { shouldAnimate } from '@/ai/flows/animation-orchestrator'; // AI feature disabled for static export
+// import type { AnimationOrchestratorInput } from '@/ai/flows/animation-orchestrator'; // AI feature disabled for static export
 import { useToast } from '@/hooks/use-toast';
 
-const LOCAL_STORAGE_KEY = 'wageWatcherDataV6'; // Incremented version for new field
+const LOCAL_STORAGE_KEY = 'wageWatcherDataV6'; 
 
 const DEFAULT_MONTHLY_SALARY = 5000;
 const DEFAULT_WORK_DAYS_PER_MONTH = 22;
@@ -272,19 +272,30 @@ export function useWageTracker() {
               const currentMilestone = Math.floor(newEarnings / numericThreshold);
 
               if (currentMilestone > prevMilestone && newEarnings > lastAnimationEarningsCheck) {
-                const aiInput: AnimationOrchestratorInput = {
-                  currentEarnings: newEarnings,
-                  lastAnimationTimestamp: lastAnimationTimestamp,
-                  threshold: numericThreshold,
-                };
-                shouldAnimate(aiInput).then(response => {
-                  if (response.triggerAnimation) {
+                // AI feature for animations is disabled for static export.
+                // To re-enable, this would need to call a separate backend API.
+                // For now, we can trigger a simpler, non-AI based celebration:
+                // const aiInput: AnimationOrchestratorInput = {
+                //   currentEarnings: newEarnings,
+                //   lastAnimationTimestamp: lastAnimationTimestamp,
+                //   threshold: numericThreshold,
+                // };
+                // shouldAnimate(aiInput).then(response => { // This line would call the AI flow
+                //   if (response.triggerAnimation) {
+                //     setShowCelebration(true);
+                //     setLastAnimationTimestamp(Date.now());
+                //   }
+                // }).catch(err => {
+                //   console.error("AI animation check failed:", err);
+                // });
+                
+                // Simplified celebration logic for static export:
+                // Trigger animation if enough time has passed since the last one, e.g., 1 minute (60000 ms)
+                const MIN_ANIMATION_INTERVAL = 60000; // 1 minute
+                if (Date.now() - lastAnimationTimestamp > MIN_ANIMATION_INTERVAL) {
                     setShowCelebration(true);
                     setLastAnimationTimestamp(Date.now());
-                  }
-                }).catch(err => {
-                  console.error("AI animation check failed:", err);
-                });
+                }
                 setLastAnimationEarningsCheck(newEarnings);
               }
             }
@@ -415,4 +426,3 @@ export function useWageTracker() {
     setShowCelebration,
   };
 }
-
