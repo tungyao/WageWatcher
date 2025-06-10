@@ -12,11 +12,14 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { FallingCoins } from '@/components/falling-coins';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock, CalendarDays, Download, Upload, AlertTriangle, Pipette } from 'lucide-react';
+import { WalletCards, Hourglass, Gift, Clock, TrendingUp, Play, Pause, RotateCcw, Settings, CalendarClock, CalendarDays, Download, Upload, AlertTriangle, Pipette, Globe } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { useToast as useShadcnToast } from "@/hooks/use-toast"; // Renamed to avoid conflict
+import { useToast as useShadcnToast } from "@/hooks/use-toast"; 
 import { useTranslations } from 'next-intl';
 import {locales} from '@/i18n';
+import { useRouter, usePathname, useLocale } from 'next-intl/client';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 export async function generateStaticParams() {
   return locales.map((locale) => ({locale}));
@@ -25,6 +28,10 @@ export async function generateStaticParams() {
 export default function WageWatcherPage() {
   const t = useTranslations('Page');
   const tToasts = useTranslations('Toasts');
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const currentLocale = useLocale();
 
   const {
     inputs,
@@ -37,21 +44,23 @@ export default function WageWatcherPage() {
     displayData,
     showCelebration,
     setShowCelebration,
-  } = useWageTracker({
-    // Pass translation functions or keys to the hook if needed for toasts initiated from the hook
-    // For now, assuming toasts are handled with keys from the hook and translated here, or hook uses useTranslations directly
-  });
+  } = useWageTracker();
 
   const { toast } = useShadcnToast();
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const languageDisplayNames: Record<string, string> = {
+    en: t('languageEnglish'),
+    zh: t('languageChinese'),
+  };
+
   const formatCurrency = (amount: number, decimalPlaces?: string) => {
     const places = decimalPlaces ? parseInt(decimalPlaces, 10) : 2;
     if (isNaN(places) || places < 0 || places > 20) { 
-        return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+        return new Intl.NumberFormat(currentLocale, { style: 'currency', currency: 'CNY', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
     }
-    return new Intl.NumberFormat('zh-CN', { style: 'currency', currency: 'CNY', minimumFractionDigits: places, maximumFractionDigits: places }).format(amount);
+    return new Intl.NumberFormat(currentLocale, { style: 'currency', currency: 'CNY', minimumFractionDigits: places, maximumFractionDigits: places }).format(amount);
   };
 
   const handleExportClick = () => {
@@ -105,7 +114,7 @@ export default function WageWatcherPage() {
           loadSettings(importedSettings as WageTrackerInputs);
           setIsSettingsModalOpen(false); 
         } else {
-          throw new Error("Invalid file format or missing keys."); // This string could also be translated
+          throw new Error("Invalid file format or missing keys.");
         }
       } catch (error) {
         console.error("Import failed:", error);
@@ -251,6 +260,23 @@ export default function WageWatcherPage() {
                   className="bg-input"
                 />
               </div>
+              <div>
+                <Label htmlFor="language-select" className="flex items-center text-sm font-medium text-muted-foreground mb-1">
+                  <Globe className="w-4 h-4 mr-2 text-primary" /> {t('languageLabel')}
+                </Label>
+                <Select value={currentLocale} onValueChange={(newLocale) => router.push(pathname, { locale: newLocale })}>
+                  <SelectTrigger id="language-select" className="w-full bg-input">
+                    <SelectValue placeholder={t('languageLabel')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {locales.map((loc) => (
+                      <SelectItem key={loc} value={loc}>
+                        {languageDisplayNames[loc] || loc}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter className="flex-col sm:flex-row sm:justify-between gap-2">
               <div className="flex gap-2">
@@ -331,3 +357,4 @@ export default function WageWatcherPage() {
     </div>
   );
 }
+

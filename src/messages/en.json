@@ -18,6 +18,9 @@
     "decimalPlacesPlaceholder": "e.g., 2",
     "decimalPlacesErrorTitle": "Invalid Input",
     "decimalPlacesErrorMessage": "Decimal places must be between 0 and 20.",
+    "languageLabel": "Language",
+    "languageEnglish": "English",
+    "languageChinese": "Chinese",
     "importButton": "Import Config",
     "exportButton": "Export Config",
     "doneButton": "Done",
@@ -50,3 +53,4 @@
     "loadSuccessMessage": "New settings have been applied."
   }
 }
+

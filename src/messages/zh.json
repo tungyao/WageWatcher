@@ -18,6 +18,9 @@
     "decimalPlacesPlaceholder": "例如, 2",
     "decimalPlacesErrorTitle": "输入无效",
     "decimalPlacesErrorMessage": "小数位数必须在0到20之间。",
+    "languageLabel": "语言",
+    "languageEnglish": "英语",
+    "languageChinese": "中文",
     "importButton": "导入配置",
     "exportButton": "导出配置",
     "doneButton": "完成",
@@ -50,3 +53,4 @@
     "loadSuccessMessage": "新设置已应用。"
   }
 }
+
